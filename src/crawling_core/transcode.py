@@ -23,12 +23,14 @@ class FfmpegTranscoder:
         ffmpeg_timeout: int = 1800,
         storage: Storage | None = None,
         on_done: Callable[[Media, Path], None] | None = None,
+        ffmpeg_extra_args: list[str] | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.build_url = build_url
         self.ffmpeg_timeout = ffmpeg_timeout
         self.storage = storage
         self.on_done = on_done
+        self.ffmpeg_extra_args = ffmpeg_extra_args or []
         self.executor = ThreadPoolExecutor(max_workers=workers)
 
     def submit(self, media: Media) -> Future[Path | None]:
@@ -50,15 +52,22 @@ class FfmpegTranscoder:
             self._finish(media, output_path)
             return output_path
 
-        url = self.build_url(media)
+        # Prefer locally downloaded M3U8 (segments already on disk, no CDN auth needed)
+        source = self.build_url(media)
+        if self.storage is not None:
+            extra = self.storage.get_media_extra(media.id)
+            local_m3u8 = extra.get("local_m3u8_path")
+            if local_m3u8:
+                p = Path(local_m3u8)
+                if p.exists() and p.stat().st_size > 0:
+                    try:
+                        head = p.read_bytes()[:16].decode("utf-8", errors="ignore")
+                        if head.lstrip().startswith("#EXTM3U"):
+                            source = str(p)
+                    except Exception:
+                        pass
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            ffmpeg, "-y",
-            "-i", url,
-            "-c", "copy",
-            "-bsf:a", "aac_adtstoasc",
-            str(output_path),
-        ]
+        cmd = [ffmpeg, "-y", *self.ffmpeg_extra_args, "-i", source, "-c", "copy", "-bsf:a", "aac_adtstoasc", str(output_path)]
 
         try:
             subprocess.run(

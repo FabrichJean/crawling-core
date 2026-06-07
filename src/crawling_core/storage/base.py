@@ -24,5 +24,9 @@ class Storage(Protocol):
     def upsert_post(self, post: ForumPost, **extra: Any) -> None:
         ...
 
+    def get_media_extra(self, media_id: str) -> dict[str, Any]:
+        """Extra pipeline-status dict for a media item (downloaded, transcoded, paths, ...)."""
+        ...
+
     def mark_status(self, table: str, item_id: str, **fields: Any) -> None:
         """Generic status-field updater, e.g. ``mark_status("media", id, downloaded=True)``."""

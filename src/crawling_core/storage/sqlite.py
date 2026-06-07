@@ -215,6 +215,13 @@ class SqliteStorage:
                 ),
             )
 
+    def get_media_extra(self, media_id: str) -> dict[str, Any]:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT extra_json FROM media WHERE id = ?", (media_id,)
+            ).fetchone()
+        return _load(row["extra_json"]) if row else {}
+
     def get_media(self, media_id: str) -> Media | None:
         with self.connect() as conn:
             row = conn.execute("SELECT * FROM media WHERE id = ?", (media_id,)).fetchone()
